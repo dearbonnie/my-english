@@ -1,0 +1,12 @@
+{
+  "storageSnapshot": {
+    "my_english_pages_records_v1": "[{\"id\":\"active-1\",\"english\":\"Every day is a good day\",\"translation\":\"每一天都是美好的一天\",\"tokens\":[{\"word\":\"Every\",\"ipa\":\"/ˈev.ri/\",\"translation\":\"每一個\",\"pos\":\"限定詞\"}],\"createdAt\":\"2026-07-01T01:00:00.000Z\",\"updatedAt\":\"2026-07-02T01:00:00.000Z\",\"lastStudiedAt\":\"2026-07-02T01:00:00.000Z\",\"isDeleted\":false,\"deletedAt\":null},{\"id\":\"trash-1\",\"english\":\"Deleted sentence\",\"translation\":\"已刪除的句子\",\"tokens\":[{\"word\":\"Deleted\",\"ipa\":\"/dɪˈliː.tɪd/\",\"translation\":\"已刪除\",\"pos\":\"形容詞\"}],\"createdAt\":\"2026-07-03T01:00:00.000Z\",\"isDeleted\":true},{\"english\":\"Qzxwvv mystery\",\"translation\":\"Qzxwvv mystery\",\"tokens\":[{\"word\":\"Qzxwvv\",\"ipa\":\"/qzxwvv/\",\"translation\":\"qzxwvv\"},{\"word\":\"mystery\"}],\"customNote\":\"preserve this unknown field\"}]",
+    "my_english_pages_current_v1": "{\"id\":\"current-analysis\",\"english\":\"How are you\",\"translation\":\"你好嗎\",\"tokens\":[{\"word\":\"How\",\"ipa\":\"/haʊ/\",\"translation\":\"如何\",\"pos\":\"副詞\"}],\"createdAt\":\"2026-07-04T01:00:00.000Z\",\"isDeleted\":false}",
+    "my_english_pages_settings_v1": null
+  },
+  "migrationContext": {
+    "migratedAt": "2026-07-12T16:00:00.000Z",
+    "envelopeId": "55555555-5555-4555-8555-555555555555",
+    "deviceId": "66666666-6666-4666-8666-666666666666"
+  }
+}

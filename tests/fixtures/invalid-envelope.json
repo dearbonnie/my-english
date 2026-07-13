@@ -1,0 +1,18 @@
+{
+  "format": "wrong-format",
+  "formatVersion": 99,
+  "envelopeId": "not-a-uuid",
+  "deviceId": "not-a-uuid",
+  "generatedAt": "not-a-date",
+  "namespaces": {
+    "invalid namespace": [],
+    "system.sync": {
+      "schemaVersion": 0,
+      "syncPolicy": "remote",
+      "updatedAt": "yesterday",
+      "data": {
+        "accessToken": "must-not-be-stored"
+      }
+    }
+  }
+}
