@@ -1,6 +1,6 @@
-const CACHE = "my-english-v2-minimal-6";
+const CACHE = "my-english-v2-minimal-15";
 const ASSETS = [
-  "./", "./index.html", "./styles.css", "./app.js?v=2-minimal-7",
+  "./", "./index.html", "./styles.css", "./app.js?v=2-minimal-16",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./src/adapters/storage/local-storage-adapter.js",
   "./src/adapters/sync/google-drive-sync-provider.js?v=oauth-1",
@@ -13,8 +13,10 @@ const ASSETS = [
   "./src/shared/checksum.js", "./src/shared/dates.js", "./src/shared/ids.js",
   "./src/system/system-namespace-definitions.js",
   "./src/tools/my-english/my-english-migrations.js",
+  "./src/tools/my-english/my-english-dictionary-api.js?v=ipa-2",
+  "./src/tools/my-english/my-english-dictionary-repository.js?v=dictionary-3",
   "./src/tools/my-english/my-english-repository.js",
-  "./src/tools/my-english/my-english-speech.js?v=voice-1",
+  "./src/tools/my-english/my-english-speech.js?v=voice-4",
   "./src/tools/my-english/my-english-sync.js?v=sync-1"
 ];
 

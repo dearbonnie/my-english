@@ -1,7 +1,9 @@
 import { createMyEnglishIntegration } from "./src/integration/my-english-integration.js?v=2-minimal";
 import { GoogleDriveSyncProvider } from "./src/adapters/sync/google-drive-sync-provider.js?v=oauth-1";
 import { MyEnglishSync } from "./src/tools/my-english/my-english-sync.js?v=sync-1";
-import { actualSpeechRate, listAmericanVoices, selectVoice } from "./src/tools/my-english/my-english-speech.js?v=voice-1";
+import { actualSpeechRate, listAmericanVoices, normalizeSpeechText, selectVoice } from "./src/tools/my-english/my-english-speech.js?v=voice-4";
+import { DictionaryRepository, seedTranslation } from "./src/tools/my-english/my-english-dictionary-repository.js?v=dictionary-3";
+import { selectDictionaryMetadata, selectWiktionaryIpa } from "./src/tools/my-english/my-english-dictionary-api.js?v=ipa-2";
 import { GOOGLE_CLIENT_ID } from "./src/config/public-google-config.js?v=oauth-1";
 
 const $ = id => document.getElementById(id);
@@ -9,15 +11,15 @@ const EXPORT_VERSION = 2;
 const NO_IPA = "暫無音標";
 const NO_WORD_TRANSLATION = "暫無逐字翻譯";
 
-const FALLBACK_POS = {every:"限定詞",day:"名詞",is:"動詞",a:"限定詞",good:"形容詞",to:"不定詞標記",learn:"動詞",something:"代名詞",new:"形容詞",i:"代名詞",would:"助動詞",like:"動詞",english:"專有名詞",have:"助動詞",you:"代名詞",been:"動詞",how:"副詞"};
-const FALLBACK_IPA = {every:"/ˈev.ri/",day:"/deɪ/",is:"/ɪz/",a:"/ə/",good:"/ɡʊd/",to:"/tə/",learn:"/lɝːn/",something:"/ˈsʌm.θɪŋ/",new:"/nuː/",i:"/aɪ/",would:"/wʊd/",like:"/laɪk/",english:"/ˈɪŋ.ɡlɪʃ/",have:"/hæv/",you:"/juː/",been:"/bɪn/",how:"/haʊ/"};
-const FALLBACK_ZH = {every:"每一個",day:"天",is:"是",a:"一個",good:"很好",to:"去／要",learn:"學習",something:"某些事物",new:"新的",i:"我",would:"會／想要",like:"喜歡",english:"英文",have:"有",you:"你",been:"曾經",how:"如何"};
+const FALLBACK_POS = {every:"限定詞",day:"名詞",is:"動詞",a:"限定詞",good:"形容詞",to:"不定詞標記",learn:"動詞",something:"代名詞",new:"形容詞",i:"代名詞",would:"助動詞",like:"動詞",english:"專有名詞",have:"助動詞",you:"代名詞",been:"動詞",how:"副詞",cross:"形容詞",device:"名詞",sync:"動詞",test:"名詞",dictionary:"名詞",repository:"名詞",migration:"名詞",architecture:"名詞",synchronization:"名詞",deployment:"名詞",infrastructure:"名詞",database:"名詞"};
+const FALLBACK_IPA = {every:"/ˈev.ri/",day:"/deɪ/",is:"/ɪz/",a:"/ə/",good:"/ɡʊd/",to:"/tə/",learn:"/lɝːn/",something:"/ˈsʌm.θɪŋ/",new:"/nuː/",i:"/aɪ/",would:"/wʊd/",like:"/laɪk/",english:"/ˈɪŋ.ɡlɪʃ/",have:"/hæv/",you:"/juː/",been:"/bɪn/",how:"/haʊ/",cross:"/krɔːs/",device:"/dɪˈvaɪs/",sync:"/sɪŋk/",test:"/test/",dictionary:"/ˈdɪkʃəˌnɛɹi/",migration:"/maɪˈɡɹeɪʃ(ə)n/",architecture:"/ˈɑɹkɪtɛktʃɚ/",synchronization:"/ˌsɪŋkɹənəˈzeɪʃən/",deployment:"/dɪˈplɔɪmənt/",infrastructure:"/ˈɪnfɹəˌstɹʌktʃɚ/",database:"/ˈdeɪtəˌbeɪs/"};
 const POS_ZH = {noun:"名詞",verb:"動詞",adjective:"形容詞",adverb:"副詞",pronoun:"代名詞",preposition:"介系詞",conjunction:"連接詞",interjection:"感嘆詞",determiner:"限定詞",exclamation:"感嘆詞"};
 
 let current = null;
 let records = [];
 let repository = null;
 let integration = null;
+let wordDictionary = null;
 let syncService = null;
 let availableVoices = [];
 let pressTimer = null;
@@ -36,9 +38,10 @@ function isFakeIpa(ipa, word) { return String(ipa || "").trim().toLowerCase() ==
 
 function normalizeToken(token = {}) {
   const word = String(token.word || "");
-  const ipa = !token.ipa || isFakeIpa(token.ipa, word) ? NO_IPA : String(token.ipa);
-  const translation = !token.translation || String(token.translation).toLowerCase() === word.toLowerCase() ? (FALLBACK_ZH[word.toLowerCase()] || NO_WORD_TRANSLATION) : String(token.translation);
-  return { word, ipa, translation, pos: String(token.pos || FALLBACK_POS[word.toLowerCase()] || "未辨識") };
+  const trustedIpa = token.ipaSource === "dictionary-api" || token.ipaSource === "wiktionary" || token.ipaSource === "built-in";
+  const ipa = !token.ipa || (!trustedIpa && isFakeIpa(token.ipa, word)) ? NO_IPA : String(token.ipa);
+  const translation = !token.translation || String(token.translation).toLowerCase() === word.toLowerCase() ? (seedTranslation(word) || NO_WORD_TRANSLATION) : String(token.translation);
+  return { ...token, word, ipa, translation, pos: String(token.pos || FALLBACK_POS[word.toLowerCase()] || "未辨識") };
 }
 
 function normalizeRecord(record = {}, index = 0) {
@@ -67,7 +70,19 @@ function setStatus(text, error = false) { $("status").textContent = text; $("sta
 function setLibraryMessage(text, error = false) { $("libraryMessage").textContent = text; $("libraryMessage").classList.toggle("error", error); }
 function setSettingsMessage(text, error = false) { $("settingsMessage").textContent = text; $("settingsMessage").classList.toggle("error", error); }
 
-async function translateSentence(text) {
+function normalizeSentenceTranslation(value) {
+  return String(value || "").trim().replace(/([A-Za-z0-9])([\u3400-\u9fff])/gu, "$1 $2");
+}
+
+function validSentenceTranslation(source, translated) {
+  const input = String(source || "").trim();
+  const output = normalizeSentenceTranslation(translated);
+  if (!output || output.toLocaleLowerCase("en-US") === input.toLocaleLowerCase("en-US")) return false;
+  if (!/[\u3400-\u9fff]/u.test(output)) return false;
+  return !/translation error|warning|quota|invalid response|翻譯失敗|無法翻譯/i.test(output);
+}
+
+async function requestSentenceTranslation(text) {
   let response;
   try {
     response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-TW`);
@@ -75,27 +90,50 @@ async function translateSentence(text) {
     throw new Error("翻譯失敗：目前無法連線至免費翻譯服務，請檢查網路後重試。");
   }
   if (!response.ok) throw new Error(`翻譯失敗：免費翻譯服務回應錯誤（${response.status}）。`);
-  const data = await response.json();
-  const translated = String(data?.responseData?.translatedText || "").trim();
-  const sameAsEnglish = translated.toLocaleLowerCase() === text.trim().toLocaleLowerCase();
-  if (Number(data?.responseStatus || 200) >= 400 || !translated || sameAsEnglish) {
-    throw new Error("翻譯失敗：服務未提供有效的中文翻譯，英文原文不會代替翻譯結果。");
+  let data;
+  try { data = await response.json(); }
+  catch { throw new Error("翻譯失敗：免費翻譯服務回傳了無效資料。"); }
+  if (!data || typeof data !== "object" || Number(data.responseStatus || 200) >= 400) {
+    throw new Error("翻譯失敗：免費翻譯服務回傳了無效資料。");
   }
-  return translated;
+  return String(data?.responseData?.translatedText || "").trim();
+}
+
+async function translateSentence(text) {
+  const translated = await requestSentenceTranslation(text);
+  if (validSentenceTranslation(text, translated)) return normalizeSentenceTranslation(translated);
+
+  const sameAsEnglish = translated.toLocaleLowerCase("en-US") === text.trim().toLocaleLowerCase("en-US");
+  if (sameAsEnglish && /\s/.test(text.trim())) {
+    const contextual = await requestSentenceTranslation(`${text.trim()} service`);
+    const withoutContext = contextual.replace(/\s*(?:服務|服务)\s*$/u, "").trim();
+    if (validSentenceTranslation(text, withoutContext)) return normalizeSentenceTranslation(withoutContext);
+  }
+
+  throw new Error("翻譯失敗：服務未提供有效的中文翻譯，英文原文不會代替翻譯結果。");
+}
+
+async function translateWord(word) {
+  const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|zh-TW`);
+  if (!response.ok) return null;
+  const data = await response.json();
+  if (Number(data?.responseStatus || 200) >= 400) return null;
+  return String(data?.responseData?.translatedText || "").trim() || null;
 }
 
 async function lookupDictionary(word) {
   const key = word.toLowerCase();
   if (dictionaryCache.has(key)) return dictionaryCache.get(key);
-  const fallback = { ipa: FALLBACK_IPA[key] || NO_IPA, pos: FALLBACK_POS[key] || "未辨識" };
+  const fallback = { ipa: FALLBACK_IPA[key] || NO_IPA, pos: FALLBACK_POS[key] || "未辨識", ipaSource: FALLBACK_IPA[key] ? "built-in" : null };
   try {
     const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(key)}`);
     if (!response.ok) return fallback;
     const entries = await response.json();
-    const entry = Array.isArray(entries) ? entries[0] : null;
-    const phonetic = String(entry?.phonetic || entry?.phonetics?.find(item => item?.text)?.text || "").trim();
-    const partOfSpeech = String(entry?.meanings?.find(item => item?.partOfSpeech)?.partOfSpeech || "").toLowerCase();
-    const result = { ipa: phonetic && !isFakeIpa(phonetic, key) ? phonetic : fallback.ipa, pos: POS_ZH[partOfSpeech] || fallback.pos };
+    let result = selectDictionaryMetadata(entries, fallback, POS_ZH);
+    if (result.ipaSource !== "dictionary-api") {
+      const wiktionaryIpa = await lookupWiktionaryIpa(key);
+      if (wiktionaryIpa) result = { ...result, ipa:wiktionaryIpa, ipaSource:"wiktionary" };
+    }
     dictionaryCache.set(key, result);
     return result;
   } catch {
@@ -103,11 +141,28 @@ async function lookupDictionary(word) {
   }
 }
 
+async function lookupWiktionaryIpa(word) {
+  try {
+    const response = await fetch(`https://en.wiktionary.org/api/rest_v1/page/html/${encodeURIComponent(word)}`);
+    if (!response.ok) return null;
+    const documentNode = new DOMParser().parseFromString(await response.text(), "text/html");
+    const englishSection = documentNode.querySelector("h2#English")?.parentElement;
+    if (!englishSection) return null;
+    return selectWiktionaryIpa([...englishSection.querySelectorAll(".IPA")].map(node => ({
+      text:node.textContent,
+      context:node.closest("li")?.textContent || ""
+    })));
+  } catch {
+    return null;
+  }
+}
+
 async function buildAnalysis(text, existing = null) {
   const words = text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) || [];
-  const [translation, dictionaryRows] = await Promise.all([
+  const [translation, dictionaryRows, wordTranslations] = await Promise.all([
     translateSentence(text),
-    Promise.all(words.map(lookupDictionary))
+    Promise.all(words.map(lookupDictionary)),
+    Promise.all(words.map(word => wordDictionary.lookup(word)))
   ]);
   const time = nowIso();
   return {
@@ -115,8 +170,7 @@ async function buildAnalysis(text, existing = null) {
     english: text,
     translation,
     tokens: words.map((word, index) => {
-      const key = word.toLowerCase();
-      return { word, ipa: dictionaryRows[index].ipa, translation: FALLBACK_ZH[key] || NO_WORD_TRANSLATION, pos: dictionaryRows[index].pos };
+      return { word, ipa: dictionaryRows[index].ipa, ipaSource: dictionaryRows[index].ipaSource, translation: wordTranslations[index] || NO_WORD_TRANSLATION, pos: dictionaryRows[index].pos };
     }),
     createdAt: existing?.createdAt || time,
     updatedAt: time,
@@ -154,7 +208,7 @@ async function analyze() {
     $("inlineTranslation").classList.remove("hidden");
     $("result").classList.add("hidden");
     $("saveBtn").classList.add("hidden");
-    setStatus(error.message, true);
+    setStatus("");
   } finally {
     analyzing = false;
     $("analyzeBtn").disabled = false;
@@ -162,11 +216,13 @@ async function analyze() {
 }
 
 function speakOne(text, card = null) {
+  const spokenText = normalizeSpeechText(text, { singleWord: Boolean(card) });
   return new Promise(resolve => {
+    if (!spokenText) { resolve(); return; }
     speechSynthesis.cancel();
     document.querySelectorAll(".token-card.playing").forEach(item => item.classList.remove("playing"));
     if (card) card.classList.add("playing");
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(spokenText);
     utterance.lang = "en-US";
     utterance.rate = actualSpeechRate($("speedSelect").value);
     utterance.voice = availableVoices.find(voice => voice.voiceURI === $("voiceSelect").value) ?? selectVoice(availableVoices);
@@ -353,7 +409,8 @@ function handleCardAction(event) {
 
 async function loadSpeechSettings() {
   const preferences = await integration.getDevicePreferences();
-  $("speedSelect").value = preferences.speechRate || "1";
+  const speechRate = ["0.5", "0.7", "1"].includes(preferences.speechRate) ? preferences.speechRate : "1";
+  $("speedSelect").value = speechRate;
   availableVoices = listAmericanVoices();
   const selected = selectVoice(availableVoices, preferences.voiceURI);
   $("voiceSelect").innerHTML = availableVoices.length
@@ -403,6 +460,7 @@ function bindUi() {
 async function bootstrap() {
   try {
     integration = createMyEnglishIntegration({ storage: window.localStorage, cryptoApi: window.crypto });
+    wordDictionary = new DictionaryRepository({ storage: window.localStorage, translationSource: translateWord });
     const initialized = await integration.initialize();
     ({ repository } = initialized);
     const provider = new GoogleDriveSyncProvider({ clientId: GOOGLE_CLIENT_ID });

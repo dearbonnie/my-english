@@ -1,5 +1,5 @@
 export const SPEECH_RATE_MAP = Object.freeze({
-  "0.5": 0.25, "0.75": 0.375, "1": 0.5, "1.25": 0.625, "1.5": 0.75
+  "0.5": 0.5, "0.7": 0.7, "1": 1
 });
 
 const UNSUITABLE_VOICE_NAMES = new Set([
@@ -30,6 +30,15 @@ export function selectVoice(voices, savedVoiceURI) {
 
 export function actualSpeechRate(displayRate) {
   return SPEECH_RATE_MAP[String(displayRate)] ?? SPEECH_RATE_MAP["1"];
+}
+
+export function normalizeSpeechText(value, { singleWord = false } = {}) {
+  const cleaned = String(value ?? "")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, " ")
+    .trim();
+  if (!singleWord) return cleaned.replace(/\s+/g, " ");
+  return cleaned.match(/[A-Za-z]+(?:['’][A-Za-z]+)?/)?.[0] ?? "";
 }
 
 function normalizeVoiceName(name) {
